@@ -1,0 +1,6 @@
+---
+orch_class::test1:
+ - centos65a
+ - centos65b
+orch_class::test2:
+ - centos65a

@@ -7,42 +7,78 @@ require 'yaml'
 #otherwise need to save off old classification
 #blow away, and restore later
 def main ()
-  runlist = YAML.load_file(ARGV[0])
-  all = runlist.values.flatten.uniq.sort 
+  plan  = YAML.load_file(ARGV[0])
+  machines = YAML.load_file(ARGV[1])
+  runlist = resolve(plan, machines) 
+  # reject the arity hashes from the all nodes list
+  all = runlist.values.flatten.uniq.reject { |v| v.class == Hash }.sort
   stop_agent(all)
-  run_puppet(all)
+  #run_puppet(0, all)
   #backup_classification(all)
-  runlist.each do |role, nodes| #arity?
+  runlist.each do |role, nodes|
+    arity = nodes[0]["arity"]
+    nodes = nodes.slice(1, nodes.length).flatten
     classify(nodes, role)
-    run_puppet(nodes)
+    run_puppet(arity, nodes)
   end
   #restore_classification(all)
-  run_puppet(all, true)
+  ##run_puppet(0, all, true)
   start_agent(all)
 end
 
 
 
 #####################################
-def run_puppet (nodes, noop=false)
+def run_puppet (arity, nodes, noop=false)
+  options = []
+  if arity.integer? && arity > 0
+    options << "--batch #{arity}"
+  elsif arity.integer? && arity == 0
+  else
+    puts "arity should be a number greater than or equal to 0! arity = #{arity}"
+  end
+
+  if noop
+    options << "--noop"
+  end
+  
+  nodes.each do |node| options << "-I #{node}" end
+
   nodes.each do |node|
     statcmd = "/bin/su - peadmin -c \'mco puppet status -I #{node}\'"
     while %x(#{statcmd}) !~ /Currently stopped/
       puts "waiting for prior run to finish on #{node}..."
       sleep(1)
     end
-    if noop
-      puts "...ready on #{node}..."
-      command = "/bin/su - peadmin -c \'mco puppet runonce --noop -I #{node}\'"
-      puts "...running in noop mode on #{node}..."
-    else
-      puts "...ready on #{node}..."
-      command = "/bin/su - peadmin -c \'mco puppet runonce -I #{node}\'"
-      puts "...running puppet on #{node}..."
-    end
-    result = %x(#{command}) 
   end
+  puts "...ready on #{nodes}..."
+  prefix = "/bin/su - peadmin -c"
+  cmd = "\'mco puppet runonce #{options * ' '}\'"
+  puts "...running puppet via mco with command: #{cmd}"
+  command = "#{prefix} #{cmd}"
+  result = %x(#{command})
+  #puts result
 end
+
+def resolve (r,m)
+  r.each do |k,v|
+    t = []
+    a = {}
+    v.each do |e|
+      if e['arity'] != nil
+        a = e
+      # try the lookup, if it succeeds, replace with machine(s)
+      elsif m[e] != nil
+        t << m[e]
+      # otherwise assume it's a machine name itself
+      else
+        t << e
+      end
+    end
+    r[k] = [a, t.flatten.uniq]
+  end
+  r
+end 
 
 RAKE = "/opt/puppet/bin/rake -f /opt/puppet/share/puppet-dashboard/Rakefile RAILS_ENV=production"
 

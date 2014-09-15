@@ -1,0 +1,7 @@
+---
+webservers:
+ - centos65a
+ - centos65b
+
+loadbalancer:
+ - master

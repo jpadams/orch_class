@@ -1,6 +1,9 @@
 ---
-orch_class::test1:
- - centos65a
- - centos65b
+ orch_class::test1:
+ - arity: 1
+ - loadbalancer
+ - webservers
 orch_class::test2:
+ - arity: 0
  - centos65a
+ - webservers
